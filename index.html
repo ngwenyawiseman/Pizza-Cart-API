@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pizza Cart</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/axios@1.6.7/dist/axios.min.js"></script>
+    <script src="pizza.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body x-data="pizzaCart()">
+    <div class="container">
+        <h1 x-text="title"></h1>
+        <div class="Cart">
+            <div>
+                <div>
+                    username: <input type="text" x-model="username">
+                    <button x-on:click="login" x-show="username && !cartId">Login</button>
+                    <button x-on:click="logout" x-show="username && cartId">Logout</button>
+                </div>
+                <div x-show="cartId">
+                    Cart code: <span x-text="cartId"></span>
+                </div>
+            </div>
+
+            <div x-show="cartTotal > 0" style="display: none;">
+                <h2>Your Cart</h2>
+                <div class="message" x-text="message"></div>
+
+                <table>
+                    <tr>
+                        <th>Flavour</th>
+                        <th>Size</th>
+                        <th>Price</th>
+                        <th>Qty</th>
+                        <th>Total</th>
+                    </tr>
+
+                    <template x-for="pizza in cartPizzas">
+                        <tr>
+                            <td x-text="pizza.flavour"></td>
+                            <td x-text="pizza.size"></td>
+                            <td x-text="pizza.price"></td>
+                            <td>
+                                <button x-on:click="addPizzaToCart(pizza.id)">+</button>
+                                x<span x-text="pizza.qty"></span>
+                                <button x-on:click="removePizzaFromCart(pizza.id)">-</button>
+                            </td>
+                            <td x-text="pizza.total"></td>
+                        </tr>
+                    </template>
+
+                    <tr>
+                        <td colspan="3">Total</td>
+                        <td colspan="2">R <span x-text="cartTotal"></span></td>
+                    </tr>
+                    <tr>
+                        <td colspan="3">Pay Now</td>
+                        <td>
+                            <input x-model="paymentAmount" type="text">
+                            <button x-on:click="payForCart()">Pay</button>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+             
+<!---This is the list of all the Pizzas-->
+            <div class="pizza" x-show="username && cartId">
+                <h2>Pizza</h2>
+                <template x-for="pizza in pizzas">
+                    <div class="pizza-box">
+                        <img src="image20.jpeg" alt="Pizza Image" class="pizza-image">
+                        <h5 x-text="pizza.flavour"></h5>
+                        <span x-text="pizza.size"></span>
+                        <strong>R<span x-text="pizza.price"></span></strong>
+                        <div>
+                            <button class="btn" x-on:click="addPizzaToCart(pizza.id)">Add to cart</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+            <div class="contact-details">
+                <h3>Contact Us</h3>
+                <p>Email: perfectpizza@pizzacart.com</p>
+                <p>Phone: +21 79 949 6503</p>
+                <p>Address: 123 Pizza Street, Maponya Mall, PZ 45678</p>
+            </div>
+        </div>
+        <div class="footer container">
+            <strong>
+                <p>&copy; 2024 MntimandeConsultingServices🐊.</p>
+            </strong>
+        </div>
+    </div>
+</body>
+
+</html>
