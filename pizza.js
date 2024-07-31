@@ -1,37 +1,103 @@
+// Listen for the Alpine.js initialization event
 document.addEventListener("alpine:init", () => {
+    // Define a new Alpine.js component named 'pizzaCart'
     Alpine.data('pizzaCart', () => {
         return {
-            title: 'Pizza Cart API',
-            username: '',
-            cartId: '',
-            cartPizzas: [],
-            cartTotal: 0,
-            paymentAmount: 0,
-            message: '',
-            featuredPizzas: [],
+            // Component state variables
+            title: 'Pizzas', // Title of the pizza section
+            pizzas: [], // List of available pizzas
+            username: localStorage.getItem('username') || '', // Username from local storage
+            cartId: localStorage.getItem('cartId') || '', // Cart ID from local storage
+            cartPizzas: [], // List of pizzas in the cart
+            cartTotal: 0.00, // Total cost of the cart
+            paymentAmount: 0, // Amount entered for payment
+            message: '', // Message for user feedback
+            orderHistory: JSON.parse(localStorage.getItem('orderHistory')) || [], // Order history from local storage
+            showOrderHistory: false, // Flag to show or hide order history
+            featuredPizzas: [], // List of featured pizzas
 
+            // Toggles the visibility of the order history
+            toggle() {
+                this.showOrderHistory = !this.showOrderHistory;
+                if (this.showOrderHistory) {
+                    this.history(); // Fetch order history if showing
+                }
+            },
+
+            // Fetches featured pizzas from the API
+            getFeaturedPizzas() {
+                const featuredPizzasURL = `https://pizza-api.projectcodex.net/api/pizzas/featured?username=${this.username}`;
+                axios.get(featuredPizzasURL)
+                    .then(response => {
+                        this.featuredPizzas = response.data.pizzas || [];
+                        console.log(response.data.pizzas);
+                    })
+                    .catch(error => {
+                        console.error('Error fetching featured pizzas:', error);
+                        this.message = 'Failed to fetch featured pizzas. Please try again later.';
+                    });
+            },
+
+            // Sets a pizza as featured via the API
+            setFeaturedPizza(pizzaId) {
+                return axios.post('https://pizza-api.projectcodex.net/api/pizzas/featured', {
+                    username: this.username,
+                    pizza_id: pizzaId,
+                }).then(() => {
+                    this.getFeaturedPizzas();
+                }).catch(error => console.error('Error setting featured pizza:', error));
+            },
+
+            // Saves the current cart state to local storage as order history
+            saveCartHistory() {
+                const history = JSON.parse(localStorage.getItem('orderHistory')) || [];
+                const currentCart = {
+                    id: this.cartId,
+                    pizzas: this.cartPizzas,
+                    total: this.cartTotal,
+                    date: new Date().toISOString(),
+                    status: 'paid',
+                    username: this.username
+                };
+                history.push(currentCart);
+                localStorage.setItem('orderHistory', JSON.stringify(history));
+                this.orderHistory = history;
+            },
+
+            // Loads order history from local storage
+            history() {
+                const history = JSON.parse(localStorage.getItem('orderHistory')) || [];
+                this.orderHistory = history;
+            },
+
+            // Handles user login
             login() {
                 if (this.username.length > 2) {
-                    localStorage['username'] = this.username;
+                    localStorage.setItem('username', this.username);
                     this.createCart();
                 } else {
                     alert("Username is too short");
                 }
             },
+
+            // Handles user logout
             logout() {
                 if (confirm('Do you want to logout?')) {
                     this.username = '';
                     this.cartId = '';
-                    localStorage.removeItem('username');
                     localStorage.removeItem('cartId');
+                    localStorage.removeItem('username');
                 }
             },
+
+            // Creates a new cart for the user via the API
             createCart() {
                 if (!this.username) {
-                    this.cartId = 'No username to create a cart for';
-                    return Promise.resolve();
+                    console.error('No username to create cart for');
+                    return;
                 }
-                const cartId = localStorage['cartId'];
+
+                const cartId = localStorage.getItem('cartId');
 
                 if (cartId) {
                     this.cartId = cartId;
@@ -41,118 +107,105 @@ document.addEventListener("alpine:init", () => {
                     return axios.get(createCartURL)
                         .then(result => {
                             this.cartId = result.data.cart_code;
-                            localStorage['cartId'] = this.cartId;
-                        });
+                            localStorage.setItem('cartId', this.cartId);
+                            this.showCartData();
+                        })
+                        .catch(error => console.error('Error creating cart:', error));
                 }
             },
 
+            // Fetches the current cart data from the API
             getCart() {
                 const getCartURL = `https://pizza-api.projectcodex.net/api/pizza-cart/${this.cartId}/get`;
-                return axios.get(getCartURL);
-            },
-            addPizza(pizzaId) {
-                return axios.post('https://pizza-api.projectcodex.net/api/pizza-cart/add', {
-                    "cart_code": this.cartId,
-                    "pizza_id": pizzaId
-                });
+                return axios.get(getCartURL)
+                    .catch(error => console.error('Error fetching cart:', error));
             },
 
-            removePizza(pizzaId) {
-                return axios.post('https://pizza-api.projectcodex.net/api/pizza-cart/remove', {
+            // Adds a pizza to the cart via the API
+            addPizzaToCart(pizzaId) {
+                axios.post('https://pizza-api.projectcodex.net/api/pizza-cart/add', {
                     "cart_code": this.cartId,
                     "pizza_id": pizzaId
-                });
+                }).then(() => {
+                    this.showCartData();
+                }).catch(error => console.error('Error adding pizza to cart:', error));
             },
 
+            // Removes a pizza from the cart via the API
+            removePizzaFromCart(pizzaId) {
+                axios.post('https://pizza-api.projectcodex.net/api/pizza-cart/remove', {
+                    "cart_code": this.cartId,
+                    "pizza_id": pizzaId
+                }).then(() => {
+                    this.showCartData();
+                }).catch(error => console.error('Error removing pizza from cart:', error));
+            },
+
+            // Handles the payment process for the cart
+            payForCart() {
+                this.pay(this.paymentAmount).then(result => {
+                    if (result.data.status === 'failure') {
+                        this.message = result.data.message;
+                    } else {
+                        const change = this.paymentAmount - this.cartTotal;
+                        this.message = `Payment successful! Your change is R${change.toFixed(2)}. Thank you for your continued support.`;
+
+                        this.saveCartHistory();
+                        this.showCartData();
+                        setTimeout(() => {
+                            this.resetCart();
+                        }, 3000);
+                    }
+                }).catch(error => console.error('Error paying for cart:', error));
+            },
+
+            // Makes a payment API call
             pay(amount) {
                 return axios.post('https://pizza-api.projectcodex.net/api/pizza-cart/pay', {
                     "cart_code": this.cartId,
-                    amount
-                });
+                    "amount": parseFloat(amount).toFixed(2)
+                }).catch(error => console.error('Error processing payment:', error));
             },
+
+            // Displays the current cart data
             showCartData() {
                 this.getCart().then(result => {
                     const cartData = result.data;
-                    this.cartPizzas = cartData.pizzas;
-                    this.cartTotal = isNaN(cartData.total) ? 0.00 : parseFloat(cartData.total).toFixed(2);
-                });
+                    this.cartPizzas = cartData.pizzas.map(pizza => ({
+                        ...pizza,
+                        price: parseFloat(pizza.price).toFixed(2),
+                        total: (parseFloat(pizza.price) * pizza.qty).toFixed(2)
+                    }));
+                    this.cartTotal = parseFloat(cartData.total).toFixed(2);
+                }).catch(error => console.error('Error displaying cart data:', error));
             },
 
+            // Resets the cart state
+            resetCart() {
+                this.cartPizzas = [];
+                this.cartTotal = 0.00;
+                this.cartId = '';
+                localStorage.removeItem('cartId');
+                this.createCart();
+                this.paymentAmount = 0.00;
+                this.message = '';
+            },
+
+            // Initializes the component state
             init() {
-                const storedUsername = localStorage['username'];
-                if (storedUsername) {
-                    this.username = storedUsername;
-                }
-
-                axios
-                    .get('https://pizza-api.projectcodex.net/api/pizzas')
-                    .then(result => {
-                        this.pizzas = result.data.pizzas;
-                    });
-
-                const storedCartId = localStorage['cartId'];
-                if (storedCartId) {
-                    this.cartId = storedCartId;
+                if (this.cartId) {
                     this.showCartData();
-                } else if (this.username) {
-                    this.createCart()
-                        .then(() => {
-                            this.showCartData();
-                        });
                 }
-
-                this.getFeaturedPizzas();
-            },
-            addPizzaToCart(pizzaId) {
-                this.addPizza(pizzaId)
-                    .then(() => {
-                        this.showCartData();
-                    });
-            },
-            removePizzaFromCart(pizzaId) {
-                this.removePizza(pizzaId)
-                    .then(() => {
-                        this.showCartData();
-                    });
-            },
-            payForCart() {
-                this.pay(this.paymentAmount)
+                axios.get('https://pizza-api.projectcodex.net/api/pizzas')
                     .then(result => {
-                        if (result.data.status === 'failure') {
-                            this.message = result.data.message;
-                            setTimeout(() => this.message = '', 3000);
-                        } else {
-                            let change = this.paymentAmount - this.cartTotal;
-                            change = change > 0 ? change.toFixed(2) : 0;
-                            this.message = `Thank you for your purchase!${change > 0 ? ' Your change is R' + change : ''}`;
-                            setTimeout(() => {
-                                this.message = '';
-                                this.cartPizzas = [];
-                                this.cartTotal = 0.00;
-                                this.cartId = '';
-                                this.paymentAmount = 0;
-                                this.createCart();
-                            }, 5000);
-                        }
-                    });
-            },
-
-            setFeaturedPizza(pizzaId) {
-                const setFeaturedPizzaURL = `https://pizza-api.projectcodex.net/api/pizzas/featured`;
-                axios.post(setFeaturedPizzaURL, {
-                    "username": this.username,
-                    "pizza_id": pizzaId
-                }).then(() => {
-                    this.getFeaturedPizzas();
-                });
-            },
-
-            getFeaturedPizzas() {
-                const getFeaturedPizzasURL = `https://pizza-api.projectcodex.net/api/pizzas/featured?username=${this.username}`;
-                axios.get(getFeaturedPizzasURL).then(result => {
-                    this.featuredPizzas = result.data.pizzas;
-                });
+                        console.log(result.data);
+                        this.pizzas = result.data.pizzas.map(pizza => ({
+                            ...pizza,
+                            price: parseFloat(pizza.price).toFixed(2)
+                        }));
+                    })
+                    .catch(error => console.error('Error fetching pizzas:', error));
             }
-        }
+        };
     });
 });
